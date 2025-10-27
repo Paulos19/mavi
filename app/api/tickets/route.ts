@@ -1,125 +1,30 @@
-// /app/api/tickets/route.ts
 import { NextResponse } from 'next/server';
-import { PrismaClient, TicketStatus, TicketType } from '@prisma/client'; // Importar Enums
+import prisma from '@/lib/prisma';
+import { FlowType, TicketStatus } from '@prisma/client'; // Importamos os Enums gerados
 
-const prisma = new PrismaClient();
-
-// API para o n8n criar ou atualizar um ticket
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const {
-      whatsappNumber,
-      nomeCompleto,
-      cidade,
-      tipoProblema,
-      // --- Campos adicionais baseados no schema ---
-      sintomas,
-      dataEntrega, // Espera string ISO ou formato que Date() entenda
-      tempoUsoDias,
-      causaProblema,
-      comprovanteEntregaUrl,
-      receitaAtualUrl,
-      // ATENÇÃO: Adicionar campo para receitasAntigasUrl se necessário coletar
-      fotoComOculosUrl,
-      fotoOculosQuebradoUrl,
-      // pagamentoPendente não precisa vir, a lógica de reenvio define
-      comprovantePgtoUrl,
-      enderecoEnvio,
-      codigoRastreio,
-      // --- Campo para identificar ticket existente (opcional na criação) ---
-      ticketId
-    } = body;
-
-    // Validação inicial para criação
-    if (!ticketId && (!whatsappNumber || !nomeCompleto || !tipoProblema)) {
-      return NextResponse.json({ error: 'Dados essenciais para criação faltando (whatsappNumber, nomeCompleto, tipoProblema)' }, { status: 400 });
-    }
-
-    let ticket;
-
-    if (ticketId) {
-      // --- ATUALIZAR TICKET EXISTENTE ---
-      // Converte tempoUsoDias para número, se presente
-      const tempoUsoDiasNum = tempoUsoDias ? parseInt(tempoUsoDias, 10) : undefined;
-      // Converte dataEntrega para Date, se presente
-      const dataEntregaDate = dataEntrega ? new Date(dataEntrega) : undefined;
-
-      // Monta o objeto de dados apenas com os campos fornecidos
-      const dataToUpdate: any = {};
-      if (sintomas !== undefined) dataToUpdate.sintomas = sintomas;
-      if (dataEntregaDate !== undefined && !isNaN(dataEntregaDate.getTime())) dataToUpdate.dataEntrega = dataEntregaDate;
-      if (tempoUsoDiasNum !== undefined && !isNaN(tempoUsoDiasNum)) dataToUpdate.tempoUsoDias = tempoUsoDiasNum;
-      if (causaProblema !== undefined) dataToUpdate.causaProblema = causaProblema;
-      if (comprovanteEntregaUrl !== undefined) dataToUpdate.comprovanteEntregaUrl = comprovanteEntregaUrl;
-      if (receitaAtualUrl !== undefined) dataToUpdate.receitaAtualUrl = receitaAtualUrl;
-      if (fotoComOculosUrl !== undefined) dataToUpdate.fotoComOculosUrl = fotoComOculosUrl;
-      if (fotoOculosQuebradoUrl !== undefined) dataToUpdate.fotoOculosQuebradoUrl = fotoOculosQuebradoUrl;
-      if (comprovantePgtoUrl !== undefined) dataToUpdate.comprovantePgtoUrl = comprovantePgtoUrl;
-      if (enderecoEnvio !== undefined) dataToUpdate.enderecoEnvio = enderecoEnvio;
-      if (codigoRastreio !== undefined) dataToUpdate.codigoRastreio = codigoRastreio;
-       // Poderia adicionar lógica para mudar o STATUS aqui se necessário
-
-      ticket = await prisma.supportTicket.update({
-        where: { id: ticketId },
-        data: dataToUpdate,
-        include: { patient: true } // Inclui dados do paciente na resposta
-      });
-
-      return NextResponse.json(ticket, { status: 200 }); // Status 200 OK para atualização
-
-    } else {
-      // --- CRIAR NOVO TICKET ---
-      // Encontra ou cria o paciente
-      const patient = await prisma.patient.upsert({
-        where: { whatsappNumber: whatsappNumber },
-        update: { nomeCompleto, cidade }, // Atualiza nome/cidade se paciente existe
-        create: { whatsappNumber, nomeCompleto, cidade },
-      });
-
-       // Converte tipoProblema string para o Enum TicketType
-       const tipoProblemaEnum = tipoProblema as TicketType;
-       if (!Object.values(TicketType).includes(tipoProblemaEnum)) {
-         return NextResponse.json({ error: 'Tipo de problema inválido' }, { status: 400 });
-       }
-
-      // Cria o ticket de suporte e o associa ao paciente
-      ticket = await prisma.supportTicket.create({
-        data: {
-          patientId: patient.id,
-          tipoProblema: tipoProblemaEnum, // Usa o Enum validado
-          // Outros campos iniciais podem ser adicionados aqui se vierem na criação
-          sintomas: body.sintomas || null, // Exemplo: detalhesIniciais poderiam vir aqui
-        },
-         include: { patient: true } // Inclui dados do paciente na resposta
-      });
-
-      return NextResponse.json(ticket, { status: 201 }); // Status 201 Created para criação
-    }
-
-  } catch (error) {
-    console.error('Erro ao processar ticket:', error);
-     // Adiciona mais detalhes do erro no log do servidor
-     let errorMessage = 'Erro interno do servidor';
-     if (error instanceof Error) {
-       errorMessage = error.message;
-       console.error(error.stack);
-     } else {
-       console.error(error);
-     }
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
-  } finally {
-     await prisma.$disconnect(); // Garante que a conexão com o BD seja fechada
-  }
+// Interface para tipar o corpo da requisição POST
+// Isso corrige os erros de 'any' e 'Cannot find name'
+interface TicketPostBody {
+  whatsapp_number: string;
+  tipo_problema: FlowType;
+  nome_cliente?: string;
+  comprovante_entrega?: string;
+  receita_atual?: string;
+  receita_antiga?: string;
+  foto_com_oculos?: string;
+  comprovante_pagamento?: string;
+  data_entrega?: string;      // O JSON enviará datas como string ISO
+  tempo_uso?: string;         // O JSON enviará números como string
+  sintomas?: string;
+  endereco_envio?: string;
+  codigo_rastreio?: string;
 }
 
-// GET continua igual...
+// GET /api/tickets
+// (Opcional: Para você poder consultar os tickets abertos)
 export async function GET() {
   try {
     const tickets = await prisma.supportTicket.findMany({
-      include: {
-        patient: true, // Inclui dados do paciente
-      },
       orderBy: {
         createdAt: 'desc',
       },
@@ -127,8 +32,81 @@ export async function GET() {
     return NextResponse.json(tickets);
   } catch (error) {
     console.error('Erro ao buscar tickets:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
-   } finally {
-     await prisma.$disconnect(); // Garante que a conexão com o BD seja fechada
+    return NextResponse.json({ error: 'Erro ao buscar tickets.' }, { status: 500 });
+  }
+}
+
+// POST /api/tickets
+// (Principal: Usado pelo n8n para CRIAR um ticket)
+export async function POST(request: Request) {
+  try {
+    // Agora o 'body' é fortemente tipado
+    const body: TicketPostBody = await request.json();
+
+    // Validação básica
+    if (!body.whatsapp_number || !body.tipo_problema) {
+      return NextResponse.json(
+        { error: 'whatsapp_number e tipo_problema são obrigatórios.' },
+        { status: 400 }
+      );
+    }
+
+    // Validação do Enum
+    if (!Object.values(FlowType).includes(body.tipo_problema)) {
+      return NextResponse.json(
+        { error: 'tipo_problema inválido. Valores válidos: ' + Object.values(FlowType).join(', ') },
+        { status: 400 }
+      );
+    }
+    
+    // Objeto de dados limpo para o Prisma
+    const dataToCreate = {
+      whatsapp_number: body.whatsapp_number,
+      tipo_problema: body.tipo_problema,
+      nome_cliente: body.nome_cliente,
+      status: TicketStatus.PENDENTE, // Usamos o Enum importado
+      
+      comprovante_entrega: body.comprovante_entrega,
+      receita_atual: body.receita_atual,
+      receita_antiga: body.receita_antiga,
+      foto_com_oculos: body.foto_com_oculos,
+      comprovante_pagamento: body.comprovante_pagamento,
+      
+      // Conversão de Tipos:
+      // Converte a string de data (ISO) para um objeto Date
+      data_entrega: body.data_entrega ? new Date(body.data_entrega) : undefined,
+      
+      // Converte a string 'tempo_uso' (ex: "10") para um Inteiro
+      tempo_uso: body.tempo_uso ? parseInt(body.tempo_uso, 10) : undefined,
+
+      sintomas: body.sintomas,
+      endereco_envio: body.endereco_envio,
+      codigo_rastreio: body.codigo_rastreio,
+    };
+
+    // Remove chaves 'undefined' para não enviar valores nulos para campos opcionais
+    // Isso é uma boa prática para evitar erros do Prisma
+    Object.keys(dataToCreate).forEach(key => 
+      (dataToCreate as any)[key] === undefined && delete (dataToCreate as any)[key]
+    );
+
+    const newTicket = await prisma.supportTicket.create({
+      data: dataToCreate,
+    });
+
+    return NextResponse.json(newTicket, { status: 201 });
+
+  } catch (error) {
+    console.error('Erro ao criar ticket:', error);
+    
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'JSON mal formatado.' }, { status: 400 });
+    }
+    // Adiciona log de erro de validação do Prisma (ex: 'tempo_uso' não é um número)
+    if ((error as any).code?.startsWith('P')) {
+       return NextResponse.json({ error: 'Erro de validação de dados do Prisma.', details: (error as any).message }, { status: 400 });
+    }
+
+    return NextResponse.json({ error: 'Erro interno ao criar ticket.' }, { status: 500 });
   }
 }
