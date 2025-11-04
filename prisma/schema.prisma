@@ -35,6 +35,16 @@ model SupportTicket {
   @@index([whatsapp_number])
 }
 
+model Notification {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  motivo    String // Ex: "Possível dificuldade de leitura"
+  whatsapp_number String
+  isRead    Boolean  @default(false)
+
+  @@index([isRead, createdAt])
+}
+
 // Enum baseado nos 4 fluxos principais do Escopo Técnico
 enum FlowType {
   ADAPTACAO

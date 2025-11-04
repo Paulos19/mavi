@@ -12,12 +12,14 @@ import {
   List,
   PanelLeftClose,
   PanelLeftOpen,
-  MessageCircle, // Ícone exemplo
+  MessageCircle,
+  Bell, // Ícone exemplo
 } from 'lucide-react'; // Ícones
 
 const navItems = [
   { href: '/dashboard', label: 'Estatísticas', icon: LayoutDashboard },
   { href: '/dashboard/tickets', label: 'Solicitações', icon: List },
+  { href: '/dashboard/notifications', label: 'Notificações', icon: Bell }
   // Adicione mais links se necessário
 ];
 
