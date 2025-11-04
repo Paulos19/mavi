@@ -1,7 +1,7 @@
-// app/(dashboard)/layout.tsx
-import { Sidebar } from './components/Sidebar'; // Criaremos este
+// app/(dashboard)/layout.tsx (Versão Final Limpa)
+import { Sidebar } from './components/Sidebar';
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;

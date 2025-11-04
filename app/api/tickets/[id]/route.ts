@@ -1,6 +1,6 @@
 // app/api/tickets/[id]/route.ts
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import {prisma} from '@/lib/prisma';
 import { TicketStatus } from '@prisma/client'; // Importa o Enum
 
 // PATCH /api/tickets/[id] - Atualiza o status

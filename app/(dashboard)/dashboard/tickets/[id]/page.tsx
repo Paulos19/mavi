@@ -1,6 +1,6 @@
 // app/(dashboard)/tickets/[id]/page.tsx
 import { notFound } from 'next/navigation';
-import prisma from '@/lib/prisma';
+import {prisma} from '@/lib/prisma';
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

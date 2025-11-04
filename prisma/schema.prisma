@@ -1,3 +1,5 @@
+// Este é o seu schema.prisma completo e atualizado
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,45 +9,104 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// NOVO: Enum para Funções de Usuário
+enum Role {
+  ADMIN
+  ASSISTANT
+  USER // User padrão, caso você precise no futuro
+}
+
+// ATUALIZADO: Modelo de Usuário
+model User {
+  id                 String    @id @default(cuid())
+  name               String?
+  email              String?   @unique
+  emailVerified      DateTime?
+  image              String?
+  password           String?   // <-- Nosso campo de senha (hashed)
+  role               Role      @default(USER) // <-- Nosso campo de função
+  mustChangePassword Boolean   @default(false) // <-- Nosso flag de primeiro login
+  
+  // Relações do Next-Auth
+  accounts Account[]
+  sessions Session[]
+}
+
+// --- Modelos Padrão do Next-Auth ---
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --- Seus Modelos Existentes (NÃO REMOVA) ---
+
 model SupportTicket {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  whatsapp_number String // O @index foi removido daqui
+  whatsapp_number String
   nome_cliente    String?
   tipo_problema   FlowType
   status          TicketStatus @default(PENDENTE)
 
-  // == ARQUIVOS (Armazenaremos as URLs) ==
+  // ... (resto dos seus campos do SupportTicket)
   comprovante_entrega   String?
   receita_atual         String?
   receita_antiga        String?
   foto_com_oculos       String?
   comprovante_pagamento String?
-
-  // == DADOS COLETADOS NOS FLUXOS ==
   data_entrega    DateTime?
   tempo_uso       Int?
   sintomas        String?
   endereco_envio  String?
   codigo_rastreio String?
 
-  // Define o índice para o campo whatsapp_number no nível do modelo
   @@index([whatsapp_number])
 }
 
 model Notification {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  motivo    String // Ex: "Possível dificuldade de leitura"
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  motivo          String
   whatsapp_number String
-  isRead    Boolean  @default(false)
+  isRead          Boolean  @default(false)
 
   @@index([isRead, createdAt])
 }
 
-// Enum baseado nos 4 fluxos principais do Escopo Técnico
+// Enums existentes (NÃO REMOVA)
 enum FlowType {
   ADAPTACAO
   QUEBROU_MAREOU
@@ -54,7 +115,6 @@ enum FlowType {
   OUTRO
 }
 
-// Status do ticket de suporte
 enum TicketStatus {
   PENDENTE
   EM_ANALISE

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { FlowType, TicketStatus } from '@prisma/client'; // Importamos os Enums gerados
 
 // Interface para tipar o corpo da requisição POST

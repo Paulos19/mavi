@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import {prisma} from '@/lib/prisma';
 
 // GET /api/notifications - Lista todas as notificações
 export async function GET() {

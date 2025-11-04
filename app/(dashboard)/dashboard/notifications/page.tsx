@@ -1,6 +1,6 @@
 // paulos19/mavi/mavi-c44b472b3401cb9f5308079afa00599ae6792457/app/(dashboard)/dashboard/notifications/page.tsx
 import { Metadata } from 'next';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
