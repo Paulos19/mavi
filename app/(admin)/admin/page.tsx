@@ -4,115 +4,134 @@ import { prisma } from "@/lib/prisma";
 import { Role, TicketStatus } from "@prisma/client";
 import { List, Users, Bell, ListChecks, Hourglass } from 'lucide-react';
 import Link from 'next/link';
+// Importar os novos componentes de gráfico
+import { AssistantPerformanceChart, AssistantPerformanceData } from "../../../components/AssistantPerformanceChart";
+import { TicketTypesChart, TicketTypeData } from "../../../components/TicketTypesChart";
 
-// Esta função busca todas as métricas em paralelo
-async function getAdminMetrics() {
+// Esta função busca as métricas dos cards
+async function getMetricCardData() {
   try {
     const [
-      totalTickets,
       pendingTickets,
-      inAnalysisTickets,
-      completedTickets,
-      totalAssistants,
-      unreadNotifications
-    ] = await Promise.all([
-      // Métricas de Tickets
-      prisma.supportTicket.count(),
-      prisma.supportTicket.count({
-        where: { status: TicketStatus.PENDENTE }
-      }),
-      prisma.supportTicket.count({
-        where: { status: TicketStatus.EM_ANALISE }
-      }),
-      prisma.supportTicket.count({
-        where: { status: TicketStatus.CONCLUIDO }
-      }),
-      // Métrica de Usuários
-      prisma.user.count({
-        where: { role: Role.ASSISTANT }
-      }),
-      // Métrica de Notificações
-      prisma.notification.count({
-        where: { isRead: false }
-      })
-    ]);
-
-    return {
-      totalTickets,
-      pendingTickets,
-      inAnalysisTickets,
-      completedTickets,
       totalAssistants,
       unreadNotifications,
-      error: null,
-    };
-
+      inAnalysisTickets,
+      completedTickets
+    ] = await Promise.all([
+      prisma.supportTicket.count({ where: { status: TicketStatus.PENDENTE } }),
+      prisma.user.count({ where: { role: Role.ASSISTANT } }),
+      prisma.notification.count({ where: { isRead: false } }),
+      prisma.supportTicket.count({ where: { status: TicketStatus.EM_ANALISE } }),
+      prisma.supportTicket.count({ where: { status: TicketStatus.CONCLUIDO } })
+    ]);
+    return { pendingTickets, totalAssistants, unreadNotifications, inAnalysisTickets, completedTickets, error: null };
   } catch (error) {
-    console.error("Erro ao buscar métricas de Admin:", error);
-    return {
-      totalTickets: 0,
-      pendingTickets: 0,
-      inAnalysisTickets: 0,
-      completedTickets: 0,
-      totalAssistants: 0,
-      unreadNotifications: 0,
-      error: "Não foi possível carregar as métricas.",
-    };
+    console.error("Erro ao buscar métricas dos cards:", error);
+    return { pendingTickets: 0, totalAssistants: 0, unreadNotifications: 0, inAnalysisTickets: 0, completedTickets: 0, error: "Erro ao carregar métricas dos cards" };
+  }
+}
+
+// 2. Nova função para buscar dados de performance
+async function getAssistantPerformance(): Promise<AssistantPerformanceData[]> {
+  try {
+    const assistants = await prisma.user.findMany({
+      where: { role: Role.ASSISTANT },
+      select: { id: true, name: true }
+    });
+
+    const totalCounts = await prisma.supportTicket.groupBy({
+      by: ['assignedToId'],
+      where: { assignedToId: { in: assistants.map(a => a.id) } },
+      _count: { id: true }, // <-- CORREÇÃO 1 (de _all para id)
+    });
+
+    const completedCounts = await prisma.supportTicket.groupBy({
+      by: ['assignedToId'],
+      where: {
+        status: TicketStatus.CONCLUIDO,
+        assignedToId: { in: assistants.map(a => a.id) }
+      },
+      _count: { id: true }, // <-- CORREÇÃO 2 (de _all para id)
+    });
+
+    const totalMap = new Map(totalCounts.map(t => [t.assignedToId, t._count.id])); // <-- CORREÇÃO 2.1
+    const completedMap = new Map(completedCounts.map(c => [c.assignedToId, c._count.id])); // <-- CORREÇÃO 2.2
+
+    const performanceData = assistants.map(assistant => {
+      const total = totalMap.get(assistant.id) || 0;
+      const completed = completedMap.get(assistant.id) || 0;
+      return {
+        name: assistant.name,
+        total,
+        completed,
+        completionRate: total > 0 ? (completed / total) * 100 : 0
+      };
+    });
+
+    return performanceData.sort((a, b) => b.total - a.total);
+  } catch (error) {
+    console.error("Erro ao buscar performance de assistentes:", error);
+    return [];
+  }
+}
+
+// 3. Nova função para buscar tipos de tickets
+async function getTicketTypes(totalTickets: number): Promise<TicketTypeData[]> {
+  if (totalTickets === 0) return [];
+  try {
+    const typeCounts = await prisma.supportTicket.groupBy({
+      by: ['tipo_problema'],
+      _count: { id: true }, // <-- CORREÇÃO 3 (de _all para id)
+      orderBy: {
+        _count: { id: 'desc' } // <-- CORREÇÃO 4 (de _all para id)
+      }
+    });
+
+    return typeCounts.map(t => ({
+      name: t.tipo_problema,
+      count: t._count.id, // <-- CORREÇÃO 4.1
+      percentage: (t._count.id / totalTickets) * 100 // <-- CORREÇÃO 4.2
+    }));
+  } catch (error) {
+    console.error("Erro ao buscar tipos de tickets:", error);
+    return [];
   }
 }
 
 export default async function AdminDashboardPage() {
-  const metrics = await getAdminMetrics();
+  // 4. Buscar todos os dados em paralelo
+  const totalTickets = await prisma.supportTicket.count();
+  const [
+    cardMetrics,
+    performanceData,
+    ticketTypeData
+  ] = await Promise.all([
+    getMetricCardData(),
+    getAssistantPerformance(),
+    getTicketTypes(totalTickets)
+  ]);
 
   const metricCards = [
-    { 
-      title: 'Total de Tickets', 
-      value: metrics.totalTickets, 
-      icon: List, 
-      href: '/admin/tickets' 
-    },
-    { 
-      title: 'Tickets Pendentes', 
-      value: metrics.pendingTickets, 
-      icon: Hourglass, 
-      href: '/admin/tickets' // Idealmente: /admin/tickets?status=PENDENTE
-    },
-    { 
-      title: 'Notificações Não Lidas', 
-      value: metrics.unreadNotifications, 
-      icon: Bell, 
-      href: '/admin/notifications' 
-    },
-    { 
-      title: 'Assistentes Ativos', 
-      value: metrics.totalAssistants, 
-      icon: Users, 
-      href: '/admin/users' 
-    },
-    { 
-      title: 'Tickets em Análise', 
-      value: metrics.inAnalysisTickets, 
-      icon: ListChecks, // Ícone diferente
-      href: '/admin/tickets' // Idealmente: /admin/tickets?status=EM_ANALISE
-    },
-    { 
-      title: 'Tickets Concluídos', 
-      value: metrics.completedTickets, 
-      icon: ListChecks, 
-      href: '/admin/tickets' // Idealmente: /admin/tickets?status=CONCLUIDO
-    },
+    { title: 'Total de Tickets', value: totalTickets, icon: List, href: '/admin/tickets' },
+    { title: 'Tickets Pendentes', value: cardMetrics.pendingTickets, icon: Hourglass, href: '/admin/tickets' },
+    { title: 'Notificações Não Lidas', value: cardMetrics.unreadNotifications, icon: Bell, href: '/admin/notifications' },
+    { title: 'Assistentes Ativos', value: cardMetrics.totalAssistants, icon: Users, href: '/admin/users' },
+    { title: 'Tickets em Análise', value: cardMetrics.inAnalysisTickets, icon: ListChecks, href: '/admin/tickets' },
+    { title: 'Tickets Concluídos', value: cardMetrics.completedTickets, icon: ListChecks, href: '/admin/tickets' },
   ];
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Visão Geral do Administrador</h1>
+    // 5. Adicionar 'space-y-6' para espaçar os elementos
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">Visão Geral do Administrador</h1>
       
-      {metrics.error && (
+      {cardMetrics.error && (
         <div className="mb-4 rounded-lg border border-destructive bg-destructive/10 p-4 text-center text-destructive-foreground">
-          {metrics.error}
+          {cardMetrics.error}
         </div>
       )}
 
+      {/* Cards de Métrica */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {metricCards.map((metric) => (
           <Link href={metric.href} key={metric.title}>
@@ -131,9 +150,11 @@ export default async function AdminDashboardPage() {
         ))}
       </div>
       
-      {/* Aqui você pode adicionar gráficos mais complexos no futuro, 
-        como performance por assistente ou tipos de tickets mais comuns.
-      */}
+      {/* 6. Renderizar os novos gráficos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <AssistantPerformanceChart data={performanceData} />
+        <TicketTypesChart data={ticketTypeData} />
+      </div>
     </div>
   );
 }
