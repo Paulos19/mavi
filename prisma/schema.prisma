@@ -1,5 +1,3 @@
-// Este é o seu schema.prisma completo e atualizado
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,30 +7,31 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// NOVO: Enum para Funções de Usuário
 enum Role {
   ADMIN
   ASSISTANT
-  USER // User padrão, caso você precise no futuro
+  USER
 }
 
-// ATUALIZADO: Modelo de Usuário
 model User {
   id                 String    @id @default(cuid())
   name               String?
   email              String?   @unique
   emailVerified      DateTime?
   image              String?
-  password           String?   // <-- Nosso campo de senha (hashed)
-  role               Role      @default(USER) // <-- Nosso campo de função
-  mustChangePassword Boolean   @default(false) // <-- Nosso flag de primeiro login
-  
-  // Relações do Next-Auth
+  password           String?
+  role               Role      @default(USER)
+  mustChangePassword Boolean   @default(false)
+  whatsappNumber     String?   @unique
+
   accounts Account[]
   sessions Session[]
-}
 
-// --- Modelos Padrão do Next-Auth ---
+  assignedTickets       SupportTicket[]
+  assignedNotifications Notification[]
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+}
 
 model Account {
   id                String  @id @default(cuid())
@@ -69,8 +68,6 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// --- Seus Modelos Existentes (NÃO REMOVA) ---
-
 model SupportTicket {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -81,19 +78,22 @@ model SupportTicket {
   tipo_problema   FlowType
   status          TicketStatus @default(PENDENTE)
 
-  // ... (resto dos seus campos do SupportTicket)
   comprovante_entrega   String?
   receita_atual         String?
   receita_antiga        String?
   foto_com_oculos       String?
   comprovante_pagamento String?
-  data_entrega    DateTime?
-  tempo_uso       Int?
-  sintomas        String?
-  endereco_envio  String?
-  codigo_rastreio String?
+  data_entrega          DateTime?
+  tempo_uso             Int?
+  sintomas              String?
+  endereco_envio        String?
+  codigo_rastreio       String?
+
+  assignedToId String?
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
 
   @@index([whatsapp_number])
+  @@index([assignedToId])
 }
 
 model Notification {
@@ -103,10 +103,13 @@ model Notification {
   whatsapp_number String
   isRead          Boolean  @default(false)
 
+  assignedToId String?
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
+
   @@index([isRead, createdAt])
+  @@index([assignedToId])
 }
 
-// Enums existentes (NÃO REMOVA)
 enum FlowType {
   ADAPTACAO
   QUEBROU_MAREOU
