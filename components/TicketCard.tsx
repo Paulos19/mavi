@@ -1,5 +1,5 @@
 // components/TicketCard.tsx
-"use client"; // Necessário para Framer Motion e useRouter
+"use client";
 
 import {
   Card,
@@ -13,12 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import Link from 'next/link';
-import Image from 'next/image'; // Importado, mas comentado no exemplo com <img>
 import { useRouter } from 'next/navigation';
 import { SupportTicket } from "@/lib/types";
+import { FlowType, TicketStatus } from "@prisma/client"; // Importar Enums
+import { User } from "lucide-react"; // Importar ícone
 
 interface TicketCardProps {
   ticket: SupportTicket;
+  isAdminView?: boolean; // Nova prop para diferenciar a view
 }
 
 // Helper para formatar o link do WhatsApp
@@ -29,28 +31,29 @@ function formatWhatsAppLink(jid: string | null | undefined): string {
 }
 
 // Helper para obter a cor do Badge com base no Status
-function getStatusVariant(status: SupportTicket['status']): "default" | "destructive" | "secondary" | "outline" {
+function getStatusVariant(status: TicketStatus): "default" | "destructive" | "secondary" | "outline" {
     switch (status) {
         case 'PENDENTE': return 'default';
         case 'EM_ANALISE': return 'secondary';
         case 'AGUARDANDO_CLIENTE': return 'outline';
-        case 'CONCLUIDO': return 'destructive';
+        case 'AGUARDANDO_ENVIO': return 'outline';
+        case 'CONCLUIDO': return 'destructive'; // Assumindo que Concluído é "final"
         default: return 'default';
     }
 }
 
 // Helper para obter a cor do Badge com base no Tipo de Problema
-function getFlowVariant(flow: SupportTicket['tipo_problema']): "default" | "destructive" | "secondary" | "outline" {
+function getFlowVariant(flow: FlowType): "default" | "destructive" | "secondary" | "outline" {
     switch (flow) {
         case 'ADAPTACAO': return 'default';
-        case 'QUEBROU_MAREOU': return 'destructive';
+        case 'QUEBROU_MAREOU': 'destructive';
         case 'NAO_BUSCOU': return 'secondary';
         case 'ENVIO_LABORATORIO': return 'outline';
         default: return 'default';
     }
 }
 
-export function TicketCard({ ticket }: TicketCardProps) {
+export function TicketCard({ ticket, isAdminView = false }: TicketCardProps) {
   const router = useRouter();
 
   const imageUrls = [
@@ -62,14 +65,19 @@ export function TicketCard({ ticket }: TicketCardProps) {
   ].filter(url => url);
 
   const handleWhatsAppClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    // 1. Impede que o clique no botão acione a navegação do Link externo
     e.stopPropagation();
-    // 2. Abre o link do WhatsApp em uma nova aba programaticamente
     const url = formatWhatsAppLink(ticket.whatsapp_number);
     if (url !== '#') {
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
+
+  // Define o link de destino com base na view
+  const detailPageUrl = isAdminView 
+    ? `/admin/tickets/${ticket.id}` 
+    : `/dashboard/tickets/${ticket.id}`;
+    
+  const assignedToName = ticket.assignedTo?.name || null;
 
   return (
     <motion.div
@@ -78,19 +86,27 @@ export function TicketCard({ ticket }: TicketCardProps) {
       transition={{ duration: 0.3 }}
       className="h-full"
     >
-      {/* O Link envolve todo o Card */}
-      <Link href={`/dashboard/tickets/${ticket.id}`} className="block h-full">
+      <Link href={detailPageUrl} className="block h-full">
          <Card className="flex flex-col h-full hover:shadow-lg transition-shadow cursor-pointer">
            <CardHeader>
              <CardTitle>{ticket.nome_cliente || 'Nome não informado'}</CardTitle>
              <CardDescription>{ticket.whatsapp_number}</CardDescription>
            </CardHeader>
            <CardContent className="flex-grow space-y-2">
-             <div className="space-x-2">
+             <div className="flex flex-wrap gap-2">
                 <Badge variant={getFlowVariant(ticket.tipo_problema)}>{ticket.tipo_problema}</Badge>
                 <Badge variant={getStatusVariant(ticket.status)}>{ticket.status}</Badge>
              </div>
-             <p className="text-sm text-muted-foreground">
+             
+             {/* Exibe o assistente atribuído APENAS na visão do Admin */}
+             {isAdminView && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
+                  <User className="h-3 w-3" />
+                  <span>{assignedToName || "Não atribuído"}</span>
+                </div>
+             )}
+
+             <p className="text-sm text-muted-foreground pt-1">
                Criado em: {ticket.createdAt.toLocaleDateString('pt-BR')}
              </p>
              {ticket.sintomas && <p className="text-sm truncate"><strong>Sintomas:</strong> {ticket.sintomas}</p>}
@@ -102,12 +118,11 @@ export function TicketCard({ ticket }: TicketCardProps) {
              )}
            </CardContent>
            <CardFooter>
-             {/* Botão corrigido: onClick agora usa window.open */}
              <Button
                size="sm"
                className='w-full'
                variant="outline"
-               onClick={handleWhatsAppClick} // Usa a função handler
+               onClick={handleWhatsAppClick}
              >
                Contactar WhatsApp
              </Button>

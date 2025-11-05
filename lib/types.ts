@@ -1,3 +1,4 @@
+// lib/types.ts
 import { FlowType, TicketStatus } from '@prisma/client';
 
 export interface SupportTicket {
@@ -5,7 +6,7 @@ export interface SupportTicket {
   createdAt: Date;
   updatedAt: Date;
   whatsapp_number: string;
-  nome_cliente?: string | null; // Permite null vindo do DB
+  nome_cliente?: string | null;
   tipo_problema: FlowType;
   status: TicketStatus;
   comprovante_entrega?: string | null;
@@ -18,4 +19,11 @@ export interface SupportTicket {
   sintomas?: string | null;
   endereco_envio?: string | null;
   codigo_rastreio?: string | null;
+  
+  // ADIÇÃO NECESSÁRIA:
+  assignedToId?: string | null;
+  assignedTo?: {
+    id: string;
+    name: string;
+  } | null;
 }

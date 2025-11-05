@@ -1,57 +1,63 @@
-// app/(dashboard)/dashboard/tickets/[id]/page.tsx
+// app/(admin)/admin/tickets/[id]/page.tsx
 import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label"; // Importar Label
 import Link from 'next/link';
 import { UpdateTicketStatus } from '@/components/UpdateTicketStatus';
 import { Metadata } from 'next';
 import { SupportTicket } from '@/lib/types';
-import { auth } from '@/auth'; // 1. Importar o auth
+import { auth } from '@/auth'; // Importar auth
 import { FlowType, TicketStatus } from '@prisma/client';
+import { User } from 'lucide-react'; // Importar ícone
 
-// 2. Atualizar a função de busca para ser SEGURA
-async function getTicketById(id: string, assistantId: string): Promise<SupportTicket | null> {
+// Importar o componente de atribuição
+import { AssignToAssistant } from '@/components/AssignToAssistant';
+
+// Tipo estendido para incluir o assistente
+type TicketWithAssignee = SupportTicket & {
+  assignedTo: { name: string } | null;
+};
+
+// Função de busca de dados do ADMIN (sem restrições de ID)
+async function getTicketById(id: string): Promise<TicketWithAssignee | null> {
   try {
-    // Busca o ticket APENAS se o ID bater E estiver atribuído ao assistente logado
-    const ticket = await prisma.supportTicket.findFirst({
-      where: { 
-        id: id,
-        assignedToId: assistantId // Garante que o assistente só veja o que é dele
-      },
+    const ticket = await prisma.supportTicket.findUnique({
+      where: { id },
+      include: {
+        assignedTo: {
+          select: { name: true } // Inclui o nome do assistente atribuído
+        }
+      }
     });
 
      if (!ticket) return null;
 
+     // Assegura que o tipo de retorno corresponde à nossa interface estendida
      return {
-        ...ticket,
+        ...(ticket as any), // O tipo do Prisma já corresponde
         createdAt: ticket.createdAt,
         updatedAt: ticket.updatedAt,
         data_entrega: ticket.data_entrega,
      };
+
   } catch (error) {
-    console.error("Erro ao buscar ticket por ID:", error);
+    console.error("Erro ao buscar ticket por ID (Admin):", error);
     return null;
   }
 }
 
-// Para metadados dinâmicos (opcional)
+// Para metadados dinâmicos
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  // A busca de metadados também precisa ser segura, mas por simplicidade
-  // podemos apenas buscar o ID ou torná-la genérica.
-  // Vamos buscar o ticket para pegar o nome do cliente.
-   const session = await auth();
-   if (!session?.user?.id) return { title: 'Ticket' }; // Fallback
-   
-   const ticket = await getTicketById(params.id, session.user.id);
-
+  const ticket = await getTicketById(params.id);
   return {
-    title: ticket ? `Ticket ${ticket.nome_cliente || params.id}` : 'Ticket Não Encontrado',
+    title: ticket ? `Ticket ${ticket.nome_cliente || params.id} (Admin)` : 'Ticket Não Encontrado',
   };
 }
 
-// --- Helpers (Copie-os do seu ficheiro original) ---
+// --- Helpers (Copie-os do seu ficheiro original do dashboard) ---
 
 function formatWhatsAppLink(jid: string | null | undefined): string {
   if (!jid) return '#';
@@ -82,20 +88,17 @@ function getFlowVariant(flow: FlowType): "default" | "destructive" | "secondary"
 // --- Fim dos Helpers ---
 
 
-export default async function TicketDetailPage({ params }: { params: { id: string } }) {
-  // 3. Obter a sessão no Server Component
+export default async function AdminTicketDetailPage({ params }: { params: { id: string } }) {
+  // Verificação de segurança (embora o middleware já trate)
   const session = await auth();
-
-  // Se não houver sessão, o middleware já deve ter redirecionado, mas é uma boa garantia
-  if (!session?.user?.id) {
-    redirect('/auth/login');
+  if (session?.user?.role !== 'ADMIN') {
+    redirect('/dashboard');
   }
-  
-  // 4. Passar o ID do assistente para a função de busca
-  const ticket = await getTicketById(params.id, session.user.id);
+
+  const ticket = await getTicketById(params.id);
 
   if (!ticket) {
-    notFound(); // Exibe página 404 se o ticket não for encontrado ou não pertencer ao assistente
+    notFound(); // Exibe página 404
   }
 
   const imageUrls = [
@@ -109,9 +112,9 @@ export default async function TicketDetailPage({ params }: { params: { id: strin
   return (
     <div className="container mx-auto py-8">
        <div className="flex justify-between items-center mb-6">
-         <h1 className="text-3xl font-bold">Detalhes da Solicitação</h1>
+         <h1 className="text-3xl font-bold">Detalhes da Solicitação (Admin)</h1>
           <Button asChild variant="outline">
-            <Link href="/dashboard/tickets">Voltar para Lista</Link>
+            <Link href="/admin/tickets">Voltar para Lista</Link>
           </Button>
        </div>
 
@@ -121,6 +124,12 @@ export default async function TicketDetailPage({ params }: { params: { id: strin
              <div>
                 <CardTitle>{ticket.nome_cliente || 'Nome não informado'}</CardTitle>
                 <CardDescription className="mt-1">{ticket.whatsapp_number}</CardDescription>
+                
+                {/* INFORMAÇÃO DE ATRIBUIÇÃO */}
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground pt-2">
+                  <User className="h-4 w-4" />
+                  <span>{ticket.assignedTo?.name || "Não atribuído"}</span>
+                </div>
              </div>
              <div className="text-right">
                  <Badge variant={getFlowVariant(ticket.tipo_problema)} className="mb-1">{ticket.tipo_problema}</Badge>
@@ -139,6 +148,7 @@ export default async function TicketDetailPage({ params }: { params: { id: strin
           {ticket.endereco_envio && <p><strong>Endereço Envio:</strong> {ticket.endereco_envio}</p>}
           {ticket.codigo_rastreio && <p><strong>Rastreio:</strong> {ticket.codigo_rastreio}</p>}
 
+          {/* Imagens Maiores */}
           {imageUrls.length > 0 && (
             <div className="mt-6 border-t pt-4">
               <h3 className="text-lg font-semibold mb-3">Arquivos Enviados:</h3>
@@ -157,11 +167,25 @@ export default async function TicketDetailPage({ params }: { params: { id: strin
             </div>
           )}
         </CardContent>
-         <CardFooter className="flex flex-col sm:flex-row items-center gap-4 border-t pt-4">
-            {/* O Assistente só pode atualizar o status */}
-           <UpdateTicketStatus ticketId={ticket.id} currentStatus={ticket.status} />
-
-           <Button asChild size="sm" variant="secondary" className="w-full sm:w-auto sm:ml-auto">
+         <CardFooter className="flex flex-col gap-4 border-t pt-6">
+            {/* 1. Componente de Atribuição */}
+            <div className="w-full space-y-2">
+              <Label htmlFor="assign-select">Atribuir Assistente</Label>
+              <AssignToAssistant
+                itemId={ticket.id}
+                itemType="ticket"
+                currentAssignedToId={ticket.assignedToId ?? null}
+              />
+            </div>
+            
+            {/* 2. Componente de Status */}
+             <div className="w-full space-y-2">
+                <Label htmlFor="status-select">Mudar Status</Label>
+                <UpdateTicketStatus ticketId={ticket.id} currentStatus={ticket.status} />
+             </div>
+            
+            {/* 3. Botão de Contato */}
+           <Button asChild size="sm" variant="secondary" className="w-full">
              <Link href={formatWhatsAppLink(ticket.whatsapp_number)} target="_blank" rel="noopener noreferrer">
                Contactar via WhatsApp
              </Link>

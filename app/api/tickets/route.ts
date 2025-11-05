@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { FlowType, TicketStatus } from '@prisma/client'; // Importamos os Enums gerados
+import { FlowType, Role, TicketStatus } from '@prisma/client'; // Importamos os Enums gerados
+import { auth } from '@/auth';
 
 // Interface para tipar o corpo da requisição POST
 // Isso corrige os erros de 'any' e 'Cannot find name'
@@ -23,11 +24,32 @@ interface TicketPostBody {
 // GET /api/tickets
 // (Opcional: Para você poder consultar os tickets abertos)
 export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
+  }
+
   try {
+    // Define a condição de busca
+    let whereCondition: any = {};
+
+    // Se não for ADMIN, filtra apenas pelos tickets atribuídos ao usuário logado
+    if (session.user.role !== Role.ADMIN) {
+      whereCondition.assignedToId = session.user.id;
+    }
+    // Se for ADMIN, 'whereCondition' fica vazio, buscando todos
+
     const tickets = await prisma.supportTicket.findMany({
+      where: whereCondition,
       orderBy: {
         createdAt: 'desc',
       },
+      // Inclui os dados do assistente para o card
+      include: {
+        assignedTo: {
+          select: { name: true, id: true }
+        }
+      }
     });
     return NextResponse.json(tickets);
   } catch (error) {
