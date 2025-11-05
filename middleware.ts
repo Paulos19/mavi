@@ -2,7 +2,7 @@ import { auth } from './auth'; // Importa do auth.ts (que contém a config)
 
 // Exporta a função 'auth' como o middleware
 export default auth;
-
+export const runtime = 'nodejs';
 // O matcher continua o mesmo
 export const config = {
   matcher: [

@@ -1,5 +1,6 @@
-// paulos19/mavi/mavi-64a12b6fa8b751e0268209b5f0db3880942259cb/tailwind.config.mjs
-import tailwindcssAnimate from 'tailwindcss-animate';
+// paulos19/mavi/mavi-ff5144ec9ee7615a398f7583f2c47c40772c8d51/tailwind.config.mjs
+import { fontFamily } from "tailwindcss/defaultTheme";
+import tailwindcssAnimate from "tailwindcss-animate"; // <-- MUDANÇA AQUI
 
 /** @type {import('tailwindcss').Config} */
 const config = {
@@ -20,19 +21,10 @@ const config = {
       },
     },
     extend: {
-      colors: { // <- Esta é a definição que estava falhando em carregar
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        // ... (o resto das suas cores)
+      fontFamily: {
+        sans: ["var(--font-geist-sans)", ...fontFamily.sans],
+        mono: ["var(--font-geist-mono)", ...fontFamily.mono],
       },
-      borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
-  		},
       keyframes: {
         "accordion-down": {
           from: { height: "0" },
@@ -47,9 +39,51 @@ const config = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
+      // Eu adicionei suas cores e bordas de volta, 
+      // pois elas estavam faltando no arquivo `mjs` que você enviou.
+      colors: { 
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
+      },
+      borderRadius: {
+  			lg: 'var(--radius)',
+  			md: 'calc(var(--radius) - 2px)',
+  			sm: 'calc(var(--radius) - 4px)'
+  		},
     },
   },
-  plugins: [tailwindcssAnimate], // <-- Use a variável importada
+  plugins: [tailwindcssAnimate], // <-- MUDANÇA AQUI
 };
 
-export default config; // <-- Use export default
+export default config;

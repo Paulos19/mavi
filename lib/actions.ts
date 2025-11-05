@@ -38,9 +38,10 @@ export async function changePassword(
   prevState: ChangePasswordState,
   formData: FormData,
 ): Promise<ChangePasswordState> {
-  const session = await auth(); // Pega a sessão segura no servidor
+  const session = await auth(); // Pega a sessão atual
 
-  if (!session?.user?.id) {
+  // Adicionamos a checagem de email, pois vamos precisar dele
+  if (!session?.user?.id || !session?.user?.email) {
     return { error: "Usuário não autenticado.", success: false };
   }
 
@@ -62,7 +63,7 @@ export async function changePassword(
     // Hash da nova senha
     const newHashedPassword = await bcrypt.hash(password, 10);
 
-    // Atualiza o usuário no banco
+    // 1. Atualiza o usuário no banco
     await prisma.user.update({
       where: { id: session.user.id },
       data: {
@@ -71,16 +72,30 @@ export async function changePassword(
       },
     });
 
+    // 2. **A CORREÇÃO:** Re-autentica o usuário com a *nova* senha.
+    // Isso gera um novo cookie de sessão com 'mustChangePassword: false'.
+    // O 'signIn' cuidará do redirecionamento para o dashboard.
+    await signIn('credentials', {
+      email: session.user.email,
+      password: password, // Usa a *nova* senha
+      redirectTo: '/dashboard', // Redireciona para o dashboard após o sucesso
+    });
+
+    // O código abaixo não será alcançado se o signIn for bem-sucedido (ele lança um redirect)
+    return { error: null, success: true };
+
   } catch (error) {
+    // 3. Captura o erro de redirecionamento do 'signIn' para evitar um crash
+    if ((error as Error).message.includes('NEXT_REDIRECT')) {
+      throw error;
+    }
+
+    if (error instanceof AuthError) {
+      // signIn falhou (improvável, mas possível)
+      return { error: 'Falha ao re-autenticar. Tente fazer login novamente.', success: false };
+    }
+
     console.error("Erro ao trocar senha:", error);
     return { error: "Erro interno ao atualizar a senha.", success: false };
   }
-
-  // Sucesso. Revalida o path e redireciona
-  revalidatePath('/dashboard');
-  redirect('/dashboard');
-  
-  // O redirect() lança um erro, então tecnicamente isso não é alcançado,
-  // mas é bom para o 'useActionState'
-  return { error: null, success: true };
 }
