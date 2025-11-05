@@ -1,33 +1,58 @@
-// app/(dashboard)/tickets/page.tsx
+// app/(dashboard)/dashboard/tickets/page.tsx
 import { TicketCard } from '@/components/TicketCard';
 import { SupportTicket } from '@/lib/types';
 import { Metadata } from 'next';
+import { auth } from '@/auth'; // 1. Importar o auth
+import { prisma } from '@/lib/prisma'; // 2. Importar o prisma
+import { Role } from '@prisma/client'; // 3. Importar o Role
 
 export const metadata: Metadata = {
   title: 'Solicitações - Ma.Vi Dashboard',
 };
 
-// Função getTickets (a mesma que você tinha antes)
+// 4. Função getTickets refatorada para buscar dados diretamente
 async function getTickets(): Promise<SupportTicket[]> {
-  // ... (código fetch para /api/tickets)
+  // Obtém a sessão diretamente no servidor
+  const session = await auth();
+
+  // O middleware já deve proteger esta página, mas é uma boa verificação
+  if (!session?.user?.id) {
+    console.error("getTickets: Tentativa de acesso não autorizada.");
+    return [];
+  }
+
   try {
-     const baseUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000';
-    const res = await fetch(`${baseUrl}/api/tickets`, { cache: 'no-store' });
-    if (!res.ok) {
-        console.error("Erro ao buscar tickets:", res.status, await res.text());
-        return [];
+    let whereCondition: any = {};
+
+    // A lógica de filtragem da API agora vive aqui:
+    // Se o utilizador NÃO for Admin, filtra pelos seus tickets atribuídos.
+    if (session.user.role !== Role.ADMIN) {
+      whereCondition.assignedToId = session.user.id;
     }
-    const data = await res.json();
-     return data.map((ticket: any) => ({
-        ...ticket,
-        createdAt: new Date(ticket.createdAt),
-        updatedAt: new Date(ticket.updatedAt),
-        data_entrega: ticket.data_entrega ? new Date(ticket.data_entrega) : null,
-      }));
+    // Se for Admin, whereCondition fica vazio, buscando todos os tickets.
+
+    const tickets = await prisma.supportTicket.findMany({
+      where: whereCondition,
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        assignedTo: { // Incluímos isto para o TicketCard (caso o admin o use)
+          select: { name: true, id: true }
+        }
+      }
+    });
+    
+    // O mapeamento de datas continua igual
+    return tickets.map((ticket: any) => ({
+      ...ticket,
+      createdAt: new Date(ticket.createdAt),
+      updatedAt: new Date(ticket.updatedAt),
+      data_entrega: ticket.data_entrega ? new Date(ticket.data_entrega) : null,
+    }));
+
   } catch (error) {
-    console.error("Erro na requisição getTickets:", error);
+    console.error("Erro ao buscar tickets direto do DB:", error);
     return [];
   }
 }

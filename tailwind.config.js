@@ -1,6 +1,6 @@
-// paulos19/mavi/mavi-ff5144ec9ee7615a398f7583f2c47c40772c8d51/tailwind.config.mjs
+// tailwind.config.mjs
 import { fontFamily } from "tailwindcss/defaultTheme";
-import tailwindcssAnimate from "tailwindcss-animate"; // <-- MUDANÇA AQUI
+import tailwindcssAnimate from "tailwindcss-animate";
 
 /** @type {import('tailwindcss').Config} */
 const config = {
@@ -22,8 +22,13 @@ const config = {
     },
     extend: {
       fontFamily: {
-        sans: ["var(--font-geist-sans)", ...fontFamily.sans],
-        mono: ["var(--font-geist-mono)", ...fontFamily.mono],
+        // Esta linha está correta e agora aponta para a 'Inter'
+        sans: ["var(--font-sans)", ...fontFamily.sans],
+        // Esta linha está correta e agora aponta para a 'JetBrains_Mono'
+        mono: ["var(--font-mono)", ...fontFamily.mono],
+        
+        // ADICIONADO: Nova utilidade de fonte para o logo
+        playfair: ["var(--font-playfair)", ...fontFamily.serif],
       },
       keyframes: {
         "accordion-down": {
@@ -39,8 +44,6 @@ const config = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
-      // Eu adicionei suas cores e bordas de volta, 
-      // pois elas estavam faltando no arquivo `mjs` que você enviou.
       colors: { 
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -83,7 +86,7 @@ const config = {
   		},
     },
   },
-  plugins: [tailwindcssAnimate], // <-- MUDANÇA AQUI
+  plugins: [tailwindcssAnimate],
 };
 
 export default config;
